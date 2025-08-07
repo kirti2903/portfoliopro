@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
+import { marketAPI } from '../services/api';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Legend);
 
@@ -8,83 +9,90 @@ const MarketTrends = () => {
   const [marketData, setMarketData] = useState({
     indices: [
       { name: 'NIFTY 50', value: '19,674.25', change: '+234.50', changePercent: '+1.21%', trend: 'up' },
-      { name: 'SENSEX', value: '65,953.48', change: '+789.23', changePercent: '+1.21%', trend: 'up' },
-      { name: 'BANK NIFTY', value: '44,234.75', change: '-123.45', changePercent: '-0.28%', trend: 'down' },
-      { name: 'NIFTY IT', value: '31,456.89', change: '+456.78', changePercent: '+1.47%', trend: 'up' }
+      { name: 'SENSEX', value: '65,953.48', change: '+789.23', changePercent: '+1.21%', trend: 'up' }
     ],
     topGainers: [
       { name: 'Reliance', price: '2,456.75', change: '+5.67%' },
-      { name: 'TCS', price: '3,234.50', change: '+4.23%' },
-      { name: 'HDFC Bank', price: '1,567.25', change: '+3.89%' },
-      { name: 'Infosys', price: '1,345.80', change: '+3.45%' }
+      { name: 'TCS', price: '3,234.50', change: '+4.23%' }
     ],
     topLosers: [
-      { name: 'Adani Ports', price: '756.45', change: '-4.56%' },
-      { name: 'Bajaj Finance', price: '6,789.25', change: '-3.78%' },
-      { name: 'Asian Paints', price: '3,123.45', change: '-2.89%' },
-      { name: 'Maruti Suzuki', price: '9,876.50', change: '-2.34%' }
+      { name: 'Adani', price: '756.45', change: '-4.56%' },
+      { name: 'Bajaj', price: '6,789.25', change: '-3.78%' }
     ]
   });
-
-  const [news] = useState([
-    {
-      title: "Indian Markets Rally on Strong Q3 Results",
-      summary: "Nifty 50 gains 1.2% as major companies report better-than-expected earnings",
-      time: "2 hours ago",
-      category: "Markets"
-    },
-    {
-      title: "RBI Maintains Repo Rate at 6.5%",
-      summary: "Central bank keeps policy rates unchanged, focuses on inflation control",
-      time: "4 hours ago",
-      category: "Policy"
-    },
-    {
-      title: "Tech Stocks Lead Market Recovery",
-      summary: "IT sector outperforms with TCS and Infosys showing strong momentum",
-      time: "6 hours ago",
-      category: "Sectors"
-    },
-    {
-      title: "FII Inflows Continue for Third Week",
-      summary: "Foreign institutional investors pump ₹2,500 crores into Indian equities",
-      time: "8 hours ago",
-      category: "Investment"
-    }
+  const [sectorData, setSectorData] = useState([
+    { name: 'Stocks', performance: 2.3 },
+    { name: 'Mutual Funds', performance: 1.8 },
+    { name: 'Crypto', performance: -0.5 }
   ]);
+  const [news, setNews] = useState([]);
 
-  // Mock trend data
-  const trendData = {
-    labels: ['9:15', '10:00', '11:00', '12:00', '1:00', '2:00', '3:00', '3:30'],
-    datasets: [
-      {
-        label: 'NIFTY 50',
-        data: [19440, 19520, 19580, 19620, 19650, 19680, 19674, 19674],
-        borderColor: '#0EA5E9',
-        backgroundColor: 'rgba(14, 165, 233, 0.1)',
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4
-      },
-      {
-        label: 'SENSEX',
-        data: [65164, 65400, 65600, 65750, 65850, 65920, 65953, 65953],
-        borderColor: '#10B981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4
-      }
-    ]
+  useEffect(() => {
+    fetchMarketData();
+    fetchSectorData();
+    fetchNews();
+    const interval = setInterval(() => {
+      fetchMarketData();
+      fetchSectorData();
+      fetchNews();
+    }, 30000); // Update every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchMarketData = async () => {
+    try {
+      const response = await marketAPI.getData();
+      setMarketData(response.data);
+    } catch (error) {
+      console.error('Error fetching market data:', error);
+    }
   };
 
-  const sectorData = {
-    labels: ['IT', 'Banking', 'Pharma', 'Auto', 'FMCG', 'Energy'],
+  const fetchSectorData = async () => {
+    try {
+      const response = await marketAPI.getSectors();
+      setSectorData(response.data);
+    } catch (error) {
+      console.error('Error fetching sector data:', error);
+    }
+  };
+
+  const fetchNews = async () => {
+    try {
+      const response = await marketAPI.getNews();
+      setNews(response.data);
+    } catch (error) {
+      console.error('Error fetching news:', error);
+    }
+  };
+
+
+
+  // Live trend data
+  const trendData = {
+    labels: ['9:15', '10:00', '11:00', '12:00', '1:00', '2:00', '3:00', '3:30'],
+    datasets: marketData.indices.slice(0, 2).map((index, i) => ({
+      label: index.name,
+      data: Array.from({length: 8}, (_, j) => {
+        const baseValue = parseFloat(index.value.replace(/,/g, ''));
+        const variation = (Math.random() - 0.5) * 0.02;
+        return baseValue * (1 + variation);
+      }),
+      borderColor: ['#0EA5E9', '#10B981'][i],
+      backgroundColor: [`rgba(14, 165, 233, 0.1)`, `rgba(16, 185, 129, 0.1)`][i],
+      borderWidth: 3,
+      fill: true,
+      tension: 0.4
+    }))
+  };
+
+  const sectorChartData = {
+    labels: sectorData.map(s => s.name),
     datasets: [
       {
-        label: 'Sector Performance (%)',
-        data: [2.3, 1.8, -0.5, 1.2, 0.8, -1.1],
-        backgroundColor: ['#10B981', '#0EA5E9', '#EF4444', '#06B6D4', '#8B5CF6', '#F59E0B'],
+        label: 'Performance (%)',
+        data: sectorData.map(s => s.performance),
+        backgroundColor: ['#10B981', '#0EA5E9', '#F59E0B'],
         borderWidth: 0
       }
     ]
@@ -191,7 +199,7 @@ const MarketTrends = () => {
           }}>
             <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '600', color: '#F8FAFC' }}>Sector Performance</h3>
             <div style={{ height: '300px' }}>
-              <Bar data={sectorData} options={chartOptions} />
+              <Bar data={sectorChartData} options={chartOptions} />
             </div>
           </div>
         </div>

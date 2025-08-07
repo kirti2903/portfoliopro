@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { assetAPI, transactionAPI } from '../services/api';
+import { assetAPI, transactionAPI, predefinedAssetAPI } from '../services/api';
 
 const AssetManagement = () => {
   const [assets, setAssets] = useState([]);
@@ -16,10 +16,49 @@ const AssetManagement = () => {
     current_price: '',
     purchase_date: new Date().toISOString().split('T')[0]
   });
+  const [suggestions, setSuggestions] = useState([]);
+  const [selectedAssetData, setSelectedAssetData] = useState(null);
 
   useEffect(() => {
     fetchAssets();
+    loadPredefinedAssets();
   }, []);
+
+  const loadPredefinedAssets = async () => {
+    try {
+      const response = await predefinedAssetAPI.search('');
+      setSuggestions(response.data);
+    } catch (error) {
+      console.error('Error loading predefined assets:', error);
+    }
+  };
+
+
+
+  // Real-time price updates for selected asset
+  useEffect(() => {
+    if (!selectedAssetData) return;
+
+    const updatePrice = async () => {
+      try {
+        const response = await predefinedAssetAPI.getBySymbol(selectedAssetData.symbol);
+        const updatedAsset = response.data;
+        
+        if (updatedAsset.current_price !== selectedAssetData.current_price) {
+          setSelectedAssetData(updatedAsset);
+          setFormData(prev => ({
+            ...prev,
+            current_price: updatedAsset.current_price
+          }));
+        }
+      } catch (error) {
+        console.error('Error updating price:', error);
+      }
+    };
+
+    const interval = setInterval(updatePrice, 5000); // Update every 5 seconds
+    return () => clearInterval(interval);
+  }, [selectedAssetData]);
 
   const fetchAssets = async () => {
     try {
@@ -102,7 +141,19 @@ const AssetManagement = () => {
       current_price: '',
       purchase_date: new Date().toISOString().split('T')[0]
     });
+    setSuggestions([]);
+    setSelectedAssetData(null);
     setShowForm(false);
+  };
+
+  const selectAsset = (asset) => {
+    setFormData({
+      ...formData,
+      asset_name: asset.name,
+      asset_type: asset.type,
+      current_price: asset.current_price
+    });
+    setSelectedAssetData(asset);
   };
 
   return (
@@ -146,15 +197,36 @@ const AssetManagement = () => {
             <form onSubmit={handleSubmit}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>Asset Name</label>
-                  <input
-                    type="text"
-                    placeholder="Asset Name"
-                    value={formData.asset_name}
-                    onChange={(e) => setFormData({...formData, asset_name: e.target.value})}
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>Select Asset</label>
+                  <select
+                    value={selectedAssetData ? selectedAssetData.id : ''}
+                    onChange={async (e) => {
+                      if (e.target.value) {
+                        const asset = suggestions.find(s => s.id == e.target.value);
+                        if (asset) selectAsset(asset);
+                      } else {
+                        setSelectedAssetData(null);
+                        setFormData({...formData, asset_name: '', asset_type: 'Stock', current_price: ''});
+                      }
+                    }}
+                    onFocus={async () => {
+                      try {
+                        const response = await predefinedAssetAPI.search('');
+                        setSuggestions(response.data);
+                      } catch (error) {
+                        console.error('Error loading assets:', error);
+                      }
+                    }}
                     required
                     style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #D1D5DB', width: '100%', fontSize: '14px' }}
-                  />
+                  >
+                    <option value="">Choose an asset...</option>
+                    {suggestions.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.name} ({asset.symbol}) - ₹{asset.current_price}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>Type</label>
@@ -185,24 +257,58 @@ const AssetManagement = () => {
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="Buy Price"
+                    placeholder="Enter your purchase price"
                     value={formData.buy_price}
                     onChange={(e) => setFormData({...formData, buy_price: e.target.value})}
                     required
                     style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #D1D5DB', width: '100%', fontSize: '14px' }}
                   />
+                  {formData.buy_price && formData.current_price && formData.quantity && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: (parseFloat(formData.current_price) - parseFloat(formData.buy_price)) >= 0 ? '#D1FAE5' : '#FEE2E2',
+                      border: `1px solid ${(parseFloat(formData.current_price) - parseFloat(formData.buy_price)) >= 0 ? '#10B981' : '#EF4444'}`
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#374151', marginBottom: '4px' }}>Profit/Loss Preview:</div>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: (parseFloat(formData.current_price) - parseFloat(formData.buy_price)) >= 0 ? '#059669' : '#DC2626'
+                      }}>
+                        {(parseFloat(formData.current_price) - parseFloat(formData.buy_price)) >= 0 ? '📈 Profit' : '📉 Loss'}: 
+                        ₹{((parseFloat(formData.current_price) - parseFloat(formData.buy_price)) * parseFloat(formData.quantity)).toFixed(2)}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>Current Price (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Current Price"
-                    value={formData.current_price}
-                    onChange={(e) => setFormData({...formData, current_price: e.target.value})}
-                    required
-                    style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #D1D5DB', width: '100%', fontSize: '14px' }}
-                  />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Current Price"
+                      value={formData.current_price}
+                      onChange={(e) => setFormData({...formData, current_price: e.target.value})}
+                      required
+                      style={{ padding: '10px 12px', borderRadius: '6px', border: '1px solid #D1D5DB', width: '100%', fontSize: '14px' }}
+                    />
+                    {selectedAssetData && (
+                      <div style={{
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '12px',
+                        color: '#059669',
+                        fontWeight: '500'
+                      }}>
+                        Live
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#374151' }}>Purchase Date</label>

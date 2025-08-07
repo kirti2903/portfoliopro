@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
-import { portfolioAPI, assetAPI, transactionAPI } from '../services/api';
+import { portfolioAPI, assetAPI, transactionAPI, predefinedAssetAPI } from '../services/api';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement);
 
@@ -23,6 +23,10 @@ const Dashboard = () => {
     current_price: '',
     purchase_date: new Date().toISOString().split('T')[0]
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedAssetData, setSelectedAssetData] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -41,9 +45,55 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchData();
+    loadPredefinedAssets();
     const interval = setInterval(fetchData, 500); // Faster updates for real-time feel
     return () => clearInterval(interval);
   }, [fetchData]);
+
+  const loadPredefinedAssets = async () => {
+    try {
+      const response = await predefinedAssetAPI.search('');
+      setSuggestions(response.data);
+    } catch (error) {
+      console.error('Error loading predefined assets:', error);
+    }
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.asset-search-container')) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Real-time price updates for selected asset
+  useEffect(() => {
+    if (!selectedAssetData) return;
+
+    const updatePrice = async () => {
+      try {
+        const response = await predefinedAssetAPI.getBySymbol(selectedAssetData.symbol);
+        const updatedAsset = response.data;
+        
+        if (updatedAsset.current_price !== selectedAssetData.current_price) {
+          setSelectedAssetData(updatedAsset);
+          setNewAsset(prev => ({
+            ...prev,
+            current_price: updatedAsset.current_price
+          }));
+        }
+      } catch (error) {
+        console.error('Error updating price:', error);
+      }
+    };
+
+    const interval = setInterval(updatePrice, 5000); // Update every 5 seconds
+    return () => clearInterval(interval);
+  }, [selectedAssetData]);
 
   const showTradeAlert = (alertData) => {
     setTradeAlert(alertData);
@@ -187,6 +237,10 @@ const Dashboard = () => {
         current_price: '',
         purchase_date: new Date().toISOString().split('T')[0]
       });
+      setSearchQuery('');
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSelectedAssetData(null);
       setShowAddAsset(false);
     } catch (error) {
       console.error('Error adding asset:', error);
@@ -218,6 +272,41 @@ const Dashboard = () => {
       pointBorderWidth: 2,
       pointRadius: 6
     }]
+  };
+
+  const searchAssets = async (query) => {
+    if (query.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const response = await predefinedAssetAPI.search(query);
+      setSuggestions(response.data);
+      setShowSuggestions(true);
+    } catch (error) {
+      console.error('Error searching assets:', error);
+    }
+  };
+
+  const selectAsset = (asset) => {
+    setNewAsset({
+      ...newAsset,
+      asset_name: asset.name,
+      asset_type: asset.type,
+      current_price: asset.current_price
+    });
+    setSearchQuery(asset.name);
+    setSelectedAssetData(asset);
+    setShowSuggestions(false);
+  };
+
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    setNewAsset({ ...newAsset, asset_name: query });
+    searchAssets(query);
   };
 
   const chartOptions = {
@@ -294,12 +383,26 @@ const Dashboard = () => {
             <form onSubmit={handleAddAsset}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#94A3B8' }}>Asset Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., Apple Inc."
-                    value={newAsset.asset_name}
-                    onChange={(e) => setNewAsset({...newAsset, asset_name: e.target.value})}
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#94A3B8' }}>Select Asset</label>
+                  <select
+                    value={selectedAssetData ? selectedAssetData.id : ''}
+                    onChange={async (e) => {
+                      if (e.target.value) {
+                        const asset = suggestions.find(s => s.id == e.target.value);
+                        if (asset) selectAsset(asset);
+                      } else {
+                        setSelectedAssetData(null);
+                        setNewAsset({...newAsset, asset_name: '', asset_type: 'Stock', current_price: ''});
+                      }
+                    }}
+                    onFocus={async () => {
+                      try {
+                        const response = await predefinedAssetAPI.search('');
+                        setSuggestions(response.data);
+                      } catch (error) {
+                        console.error('Error loading assets:', error);
+                      }
+                    }}
                     required
                     style={{ 
                       padding: '12px', 
@@ -310,7 +413,14 @@ const Dashboard = () => {
                       backgroundColor: '#0F172A',
                       color: '#F8FAFC'
                     }}
-                  />
+                  >
+                    <option value="">Choose an asset...</option>
+                    {suggestions.map((asset) => (
+                      <option key={asset.id} value={asset.id}>
+                        {asset.name} ({asset.symbol}) - ₹{asset.current_price}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#94A3B8' }}>Type</label>
@@ -357,9 +467,9 @@ const Dashboard = () => {
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="Buy Price"
+                    placeholder="Enter your purchase price"
                     value={newAsset.buy_price}
-                    onChange={(e) => setNewAsset({...newAsset, buy_price: e.target.value, current_price: e.target.value})}
+                    onChange={(e) => setNewAsset({...newAsset, buy_price: e.target.value, current_price: selectedAssetData ? newAsset.current_price : e.target.value})}
                     required
                     style={{ 
                       padding: '12px', 
@@ -371,6 +481,60 @@ const Dashboard = () => {
                       color: '#F8FAFC'
                     }}
                   />
+                  {newAsset.buy_price && newAsset.current_price && newAsset.quantity && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: (parseFloat(newAsset.current_price) - parseFloat(newAsset.buy_price)) >= 0 ? '#065F46' : '#7F1D1D',
+                      border: `1px solid ${(parseFloat(newAsset.current_price) - parseFloat(newAsset.buy_price)) >= 0 ? '#10B981' : '#EF4444'}`
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#F8FAFC', marginBottom: '4px' }}>Profit/Loss Preview:</div>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: (parseFloat(newAsset.current_price) - parseFloat(newAsset.buy_price)) >= 0 ? '#10B981' : '#EF4444'
+                      }}>
+                        {(parseFloat(newAsset.current_price) - parseFloat(newAsset.buy_price)) >= 0 ? '📈 Profit' : '📉 Loss'}: 
+                        ₹{((parseFloat(newAsset.current_price) - parseFloat(newAsset.buy_price)) * parseFloat(newAsset.quantity)).toFixed(2)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: '500', color: '#94A3B8' }}>Current Price (₹)</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Current Price"
+                      value={newAsset.current_price}
+                      onChange={(e) => setNewAsset({...newAsset, current_price: e.target.value})}
+                      required
+                      style={{ 
+                        padding: '12px', 
+                        borderRadius: '8px', 
+                        border: '1px solid #475569', 
+                        width: '100%', 
+                        fontSize: '14px',
+                        backgroundColor: '#0F172A',
+                        color: '#F8FAFC'
+                      }}
+                    />
+                    {selectedAssetData && (
+                      <div style={{
+                        position: 'absolute',
+                        right: '12px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '12px',
+                        color: '#0EA5E9',
+                        fontWeight: '500'
+                      }}>
+                        Live
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <button 

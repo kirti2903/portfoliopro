@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'http://localhost:5001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -31,4 +31,16 @@ export const goalAPI = {
   create: (data) => api.post('/goals', data),
   updateProgress: (id, data) => api.put(`/goals/${id}/progress`, data),
   delete: (id) => api.delete(`/goals/${id}`)
+};
+
+export const predefinedAssetAPI = {
+  search: (query) => api.get(`/predefined-assets/search?query=${encodeURIComponent(query)}`),
+  getBySymbol: (symbol) => api.get(`/predefined-assets/${symbol}`),
+  updatePrice: (symbol, price) => api.put(`/predefined-assets/${symbol}/price`, { price })
+};
+
+export const marketAPI = {
+  getData: () => api.get('/market/data'),
+  getSectors: () => api.get('/market/sectors'),
+  getNews: () => api.get('/market/news')
 };
