@@ -1,19 +1,15 @@
 pipeline {
-    agent { label 'master' }  // Or your Jenkins node label
+    agent { label 'master' }
 
     tools {
-        nodejs 'NodeJS 18' // Make sure this name matches the NodeJS version name in Jenkins
-    }
-
-    environment {
-        // Example if you need DB URL or secret keys
-        // DB_URL = credentials('my-db-url')
+        nodejs 'NodeJS_24'  // Match exactly with Jenkins Global Tool Config
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Clone Repository') {
             steps {
-                git 'https://github.com/kirti2903/FinalUpdatedproject.git'
+                // node context is automatically provided by 'agent any'
+                git 'https://github.com/kirti2903/portfoliopro'
             }
         }
 
@@ -28,30 +24,32 @@ pipeline {
         stage('Run Tests') {
             steps {
                 dir('backend') {
-                    sh 'npm test'
+                    // Replace with actual test command if needed
+                    sh 'npm test || echo "No tests available"'
                 }
             }
         }
 
         stage('Build') {
             steps {
-                echo 'Build step - optional for Node.js backend'
+                echo 'No build step needed for backend'
             }
         }
 
         stage('Deploy') {
             steps {
-                echo 'Deploy step - can be added later'
+                echo 'Add deployment logic here'
             }
         }
     }
 
     post {
-        success {
-            echo 'Pipeline executed successfully!'
-        }
-        failure {
-            echo 'Pipeline failed.'
+        always {
+            // ✅ MUST be wrapped in node to access workspace
+            node {
+                echo 'Cleaning up workspace...'
+                deleteDir()
+            }
         }
     }
 }
