@@ -44,12 +44,10 @@ pipeline {
     }
 
     post {
-        always {
-            // ✅ MUST be wrapped in node to access workspace
-            node {
-                echo 'Cleaning up workspace...'
-                deleteDir()
-            }
-        }
+    always {
+        echo 'Cleaning up workspace...'
+        deleteDir()
     }
+}
+
 }
