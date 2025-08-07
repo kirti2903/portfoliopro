@@ -25,7 +25,7 @@ pipeline {
             steps {
                 dir('backend') {
                     // Replace with actual test command if needed
-                    bat 'npm test || echo "No tests available"'
+                     bat 'npm test -- --passWithNoTests'
                 }
             }
         }
