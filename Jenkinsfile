@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'master' }
+    agent any
 
     tools {
         nodejs 'NodeJS_24'  // Match exactly with Jenkins Global Tool Config
