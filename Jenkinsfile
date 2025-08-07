@@ -16,7 +16,7 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 dir('backend') {
-                    sh 'npm install'
+                    bat 'npm install'
                 }
             }
         }
@@ -25,7 +25,7 @@ pipeline {
             steps {
                 dir('backend') {
                     // Replace with actual test command if needed
-                    sh 'npm test || echo "No tests available"'
+                    bat 'npm test || echo "No tests available"'
                 }
             }
         }
